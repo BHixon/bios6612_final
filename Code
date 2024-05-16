@@ -1,0 +1,335 @@
+---
+title: "Bios 6612 Final Project"
+author: "Brian Hixon"
+date: "5/10/2024"
+output: word_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(dplyr)
+library(data.table)
+library(psych)
+library(lmerTest)
+library(lme4)
+library(geepack)
+library(finalfit)
+library(mice)
+library(ggplot2)
+library(glmtoolbox)
+library(hrbrthemes)
+library(viridis)
+
+```
+
+```{r, echo=FALSE}
+data<-read.csv("Final_Project_Data.csv")
+```
+
+```{r}
+describe(data)
+
+```
+
+
+```{r}
+#found several with an age of 0 or an NA outcome, removed from analytic cohort
+
+baseline2 <- subset(data, followup==3)
+
+second2 <- subset(data, followup==6)
+
+third2 <- subset(data, followup==12)
+
+explanatory = c("fam_age", "fam_female", 
+  "fam_hispanic",  
+  "fam_race", "death")
+dependent = "IES"
+
+baseline2 %>% 
+  summary_factorlist(dependent, explanatory, 
+  na_include=TRUE, p=TRUE)
+baseline2 %>% 
+ missing_pairs(dependent, explanatory, position = "fill", )
+
+second2 %>% 
+  summary_factorlist(dependent, explanatory, 
+  na_include=TRUE, p=TRUE)
+second2 %>% 
+  missing_pairs(dependent, explanatory, position = "fill", )
+
+third2 %>% 
+  summary_factorlist(dependent, explanatory, 
+  na_include=TRUE, p=TRUE)
+third2 %>% 
+ missing_pairs(dependent, explanatory, position = "fill", )
+
+#After looking at initial missing I start cleaning
+clean_data1 <- subset(data, fam_age!=0)
+
+clean_data2 <- na.omit(clean_data1)
+
+baseline1 <- subset(clean_data1, followup==3)
+
+second1 <- subset(clean_data1, followup==6)
+
+third1 <- subset(clean_data1, followup==12)
+
+
+counts<-data.frame(table(clean_data2$id))
+counts<-counts%>%rename(id = Var1)
+
+clean_data2 <- merge(clean_data2, counts, by = "id", all.x = TRUE)
+
+clean_data <- subset(clean_data2, Freq!=1)
+
+baseline <- subset(clean_data, followup==3)
+
+second <- subset(clean_data, followup==6)
+
+third <- subset(clean_data, followup==12)
+
+baseline %>% 
+  summary_factorlist(dependent, explanatory, 
+  na_include=TRUE, p=TRUE)
+baseline %>% 
+ missing_pairs(dependent, explanatory, position = "fill", )
+
+second %>% 
+  summary_factorlist(dependent, explanatory, 
+  na_include=TRUE, p=TRUE)
+second %>% 
+  missing_pairs(dependent, explanatory, position = "fill", )
+
+third %>% 
+  summary_factorlist(dependent, explanatory, 
+  na_include=TRUE, p=TRUE)
+third %>% 
+ missing_pairs(dependent, explanatory, position = "fill", )
+
+
+clean_data%>% 
+  summary_factorlist(dependent, explanatory, 
+  na_include=TRUE, p=TRUE)
+clean_data%>% 
+ missing_pairs(dependent, explanatory, position = "fill",   use_labels = FALSE,) + theme_bw()
+
+
+clean_data1%>% 
+  summary_factorlist(dependent, explanatory, 
+  na_include=TRUE, p=TRUE)
+clean_data1%>% 
+ missing_pairs(dependent, explanatory, position = "fill",   use_labels = FALSE,) +theme_bw()
+
+clean_data %>%
+ggplot(aes(followup, IES, group = followup))+ 
+    ggtitle("Boxplot of IES Score During Follow-Up") +
+geom_boxplot() +theme_bw()+ scale_x_continuous(breaks=seq(0,12,by=3))
+
+par(mfrow=c(1,2))
+
+p1<-baseline%>%ggplot(aes(x=IES)) + 
+  geom_histogram()+theme_bw()+labs(x = "IES Score", y = "Frequency", title = "3-Month Visit Analytic") 
+p2<-second%>%ggplot(aes(x=IES)) + 
+  geom_histogram()+theme_bw()+labs(x = "IES Score", y = "Frequency", title = "6-Month Visit Analytic") 
+p3<-third%>%ggplot(aes(x=IES)) + 
+  geom_histogram()+theme_bw()+labs(x = "IES Score", y = "Frequency", title = "12-Month Visit Analytic") 
+
+p1
+p2
+p3
+
+q1<-baseline1%>%ggplot(aes(x=IES)) + 
+  geom_histogram()+theme_bw()+labs(x = "IES Score", y = "Frequency", title = "3-Month Visit Original") 
+q2<-second1%>%ggplot(aes(x=IES)) + 
+  geom_histogram()+theme_bw()+labs(x = "IES Score", y = "Frequency", title = "6-Month Visit Original") 
+q3<-third1%>%ggplot(aes(x=IES)) + 
+  geom_histogram()+theme_bw()+labs(x = "IES Score", y = "Frequency", title = "12-Month Visit Original") 
+q1
+q2
+q3
+
+residuals = clean_data %>%
+group_by(followup) %>%
+mutate(IES_mean = mean(IES)) %>%
+ungroup() %>%
+mutate(residuals = IES - IES_mean) %>%
+select(id, followup, residuals)
+
+residuals_wide = residuals %>%
+pivot_wider(names_from = followup,
+names_glue = paste0("month_", "{followup}"),
+values_from = residuals) %>%
+select(-id)
+
+pairs(residuals_wide)
+
+
+```
+
+```{r}
+library(arsenal) 
+table_one <- tableby(ies_bin ~ ., data = baseline) 
+summary(table_one, title = "IES Summary Data")
+
+table_onea <- tableby(ies_bin ~ ., data = baseline1) 
+summary(table_onea, title = "IES Summary Data")
+table(baseline$ies_bin)
+table(baseline$death)
+
+table(baseline$death, baseline$ies_bin)
+
+table(baseline1$death, baseline1$ies_bin)
+chisq.test(baseline$death, baseline$ies_bin)
+
+table(baseline1$ies_bin)
+table(baseline1$death)
+
+table(baseline1$death, baseline1$ies_bin)
+
+table(baseline1$death, baseline1$ies_bin)
+chisq.test(baseline1$death, baseline1$ies_bin)
+
+```
+
+```{r}
+clean_data %>%
+ggplot(aes(followup, IES)) +
+  geom_point(alpha=0.5) +
+geom_smooth(method = "lm") +
+geom_smooth(method = "gam", color = "red")+
+  labs(x = "Months Follow Up Time", y = "IES Score", title = "IES Score Over Followup Time") +
+  theme_bw()+ scale_x_continuous(breaks=seq(0,12,by=3))
+
+randint1 = lmer(IES ~ (1+followup | id) + followup, data = clean_data)
+
+
+
+
+```
+
+```{r}
+#Three different models
+
+#used lmer to get p values since its essentially the same for a coninuous distribution
+lmm = lmer(IES ~ (1 + followup| id) + followup, data = clean_data)
+summary(lmm)
+
+glmm = glmer(IES ~ (1 | id) + followup, data = clean_data)
+summary(glmm)
+
+geemod = geeglm(IES ~ followup,id = id, data = clean_data, family = gaussian, corstr = "ar1")
+summary(geemod)
+
+AIC(lmm)
+AIC(glmm)
+
+confint.merMod(glmm,method="Wald")
+
+```
+
+```{r}
+
+
+clean_data$fitted_valuesi = fitted(lmm)
+clean_data %>%filter(id %in% c(5, 8, 11, 22, 28, 54, 96, 106, 121, 176)) %>%
+ggplot(aes(x = followup, y = IES, group = id)) +
+geom_point() + geom_path(alpha = .8) +
+labs(x = "Month", y = "IES", title = "IES Score During Followup - Random Intercept") +
+stat_smooth(method = "lm", aes(group = NULL), se = FALSE, color = "red", size = 1.1) +
+geom_line(aes(y = fitted_valuesi), color = "blue", alpha = .8)
+
+
+clean_data$fitted_valuess = fitted(glmm)
+clean_data %>%filter(id %in% c(5, 8, 11, 22, 28, 54, 96, 106, 121, 176)) %>%
+ggplot(aes(x = followup, y = IES, group = id)) +
+geom_point() + geom_path(alpha = .8) +
+labs(x = "Month", y = "IES", title = "IES Score During Followup - GLMM Random Intercept") +
+stat_smooth(method = "lm", aes(group = NULL), se = FALSE, color = "red", size = 1.1) +
+geom_line(aes(y = fitted_valuess), color = "blue", alpha = .8)+theme_bw()
+
+
+clean_data$fitted_valuesg = fitted(geemod)
+
+clean_data %>%filter(id %in% c(5, 8, 11, 22, 28, 54, 96, 106, 121, 176)) %>%
+ggplot(aes(x = followup, y = IES, group = id)) +
+geom_point() + geom_path(alpha = .8) +
+labs(x = "Months Follow Up Time", y = "IES Score", title = "IES Score by Follow-Up Time for GEE Model Select Ids") +
+stat_smooth(method = "lm", aes(group = NULL), se = FALSE, color = "red", size = 1.1) +
+geom_line(aes(y = fitted_valuesg), color = "blue", alpha = .8) +theme_bw()
+
+```
+
+```{r}
+geemod2 = geeglm(ies_bin ~ followup,id = id, data = clean_data, family = gaussian, corstr = "ar1")
+summary(geemod2)
+
+randslope2 = glmer(ies_bin ~ (1| id) + followup, family=binomial, data = clean_data, control=glmerControl(optimizer="bobyqa"))
+summary(randslope2)
+
+cbind(OR=exp(coef(geemod2)),
+      exp(confint.default(geemod2)),
+      pval=summary(geemod2)$coefficients[,4])
+
+se <- sqrt(diag(vcov(randslope2)))
+# table of estimates with 95% CI
+tab <- cbind(Est = fixef(randslope2), LL = fixef(randslope2) - 1.96 * se, UL = fixef(randslope2) + 1.96 * se)
+print(exp(tab), digits=3)
+
+```
+
+```{r}
+#Comparison of patient characteristics
+clean_data <- within(clean_data, fam_race<- relevel(factor(fam_race), ref = 'White'))
+
+age = glmer(IES ~ (1 | id) + followup+ fam_age, data = clean_data)
+summary(age)
+
+age1 = glmer(ies_bin ~ (1 | id) + followup+ fam_age,  family=binomial, data = clean_data)
+summary(age1)
+
+sex = glmer(IES ~ (1 | id) + followup+ fam_female, data = clean_data)
+summary(sex1)
+
+sex1 = glmer(ies_bin ~ (1 | id) + followup+ fam_female,  family=binomial,data = clean_data)
+summary(sex1)
+
+race = glmer(IES ~ (1 | id) + followup+ fam_race, data = clean_data)
+summary(race)
+
+race1 = glmer(ies_bin ~ (1 | id) + followup+ fam_race,  family=binomial,data = clean_data)
+summary(race1)
+
+hisp = glmer(IES ~ (1 | id) + followup+ fam_hispanic, data = clean_data)
+summary(hisp)
+
+hisp1 = glmer(ies_bin ~ (1 | id) + followup+ fam_hispanic,  family=binomial, data = clean_data)
+summary(hisp1)
+
+death = glmer(IES ~ (1 | id) + followup+ death, data = clean_data)
+summary(death)
+
+death1 = glmer(ies_bin ~ (1 | id) + followup+ death,  family=binomial, data = clean_data)
+summary(death1)
+```
+```{r}
+contfinal = glmer(IES ~ (1 | id) + followup+ fam_age+fam_female+fam_race, data = clean_data)
+summary(contfinal)
+
+confint.merMod(contfinal, method="Wald")
+
+binfinal = glmer(ies_bin ~ (1 | id) + followup + fam_age +fam_female +fam_race, family=binomial, data = clean_data)
+summary(binfinal)
+
+se <- sqrt(diag(vcov(binfinal)))
+# table of estimates with 95% CI
+tab <- cbind(Est = fixef(binfinal), LL = fixef(binfinal) - 1.96 * se, UL = fixef(binfinal) + 1.96 * se)
+print(exp(tab), digits=5)
+
+
+```
+
+
+
+
